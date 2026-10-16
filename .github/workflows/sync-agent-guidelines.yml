@@ -1,0 +1,90 @@
+name: Sync agent guidelines
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout guidelines
+        uses: actions/checkout@v4
+
+      - name: Install GitHub CLI
+        run: |
+          type -p gh >/dev/null || (sudo apt-get update && sudo apt-get install -y gh)
+
+      - name: Sync AGENTS.md and CLAUDE.md to targets
+        env:
+          GH_TOKEN: ${{ secrets.GUIDELINES_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          git_auth_configured=0
+
+          commit_message="chore: sync agent guidelines from xenomit-do/xenomit-tooling-guidelines [skip ci]"
+          guidelines_root="$(pwd)"
+          managed_marker='xenomit-tooling-guidelines:managed'
+
+          preserve_root_as_local() {
+            local root_name="$1"
+            local local_name="$2"
+            local central_path="$3"
+
+            if [[ ! -f "${root_name}" ]]; then
+              return 0
+            fi
+            if cmp -s "${root_name}" "${central_path}"; then
+              return 0
+            fi
+            if grep -q "${managed_marker}" "${root_name}"; then
+              return 0
+            fi
+            if [[ -f "${local_name}" ]]; then
+              echo "Keeping existing ${local_name} (not overwriting)."
+              return 0
+            fi
+            cp "${root_name}" "${local_name}"
+            echo "Preserved prior ${root_name} as ${local_name}"
+          }
+
+          while IFS=$'\t' read -r repo branch || [[ -n "${repo:-}" ]]; do
+            repo="${repo//$'\r'/}"
+            branch="${branch//$'\r'/}"
+            [[ -z "${repo}" || "${repo}" =~ ^# ]] && continue
+            [[ -z "${branch}" ]] && { echo "Skipping malformed line (missing branch): ${repo}"; continue; }
+
+            echo "Syncing ${repo} (${branch})..."
+            workdir=$(mktemp -d)
+            git clone --depth 1 --branch "${branch}" "https://github.com/${repo}.git" "${workdir}/target"
+
+            pushd "${workdir}/target" >/dev/null
+            preserve_root_as_local AGENTS.md AGENTS.local.md "${guidelines_root}/AGENTS.md"
+            preserve_root_as_local CLAUDE.md CLAUDE.local.md "${guidelines_root}/CLAUDE.md"
+            cp "${guidelines_root}/AGENTS.md" "${guidelines_root}/CLAUDE.md" .
+
+            to_stage=(AGENTS.md CLAUDE.md)
+            [[ -f AGENTS.local.md ]] && to_stage+=(AGENTS.local.md)
+            [[ -f CLAUDE.local.md ]] && to_stage+=(CLAUDE.local.md)
+            git add "${to_stage[@]}"
+
+            if git diff --cached --quiet; then
+              echo "No changes for ${repo}"
+            else
+              if [[ -z "${GH_TOKEN:-}" ]]; then
+                echo "error: ${repo}@${branch} needs a push but GH_TOKEN is empty. Set the GUIDELINES_SYNC_TOKEN repository secret."
+                exit 1
+              fi
+              if [[ "${git_auth_configured}" -eq 0 ]]; then
+                gh auth setup-git
+                git_auth_configured=1
+              fi
+              git commit -m "${commit_message}"
+              git push origin "HEAD:${branch}"
+              echo "Pushed updates to ${repo}@${branch}"
+            fi
+            popd >/dev/null
+            rm -rf "${workdir}"
+          done < targets.tsv
