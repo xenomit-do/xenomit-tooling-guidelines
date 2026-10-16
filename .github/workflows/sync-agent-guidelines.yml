@@ -25,8 +25,38 @@ jobs:
           configured_auth_owner=""
 
           commit_message="chore: sync agent guidelines from xenomit-do/xenomit-tooling-guidelines [skip ci]"
+          sync_branch="automation/sync-agent-guidelines"
           guidelines_root="$(pwd)"
           managed_marker='xenomit-tooling-guidelines:managed'
+
+          merge_sync_pr() {
+            local repo="$1"
+            local pr="$2"
+
+            if gh pr merge "${pr}" --repo "${repo}" --squash --delete-branch; then
+              echo "Merged PR #${pr} on ${repo}"
+              return 0
+            fi
+
+            echo "Waiting for required checks on ${repo} PR #${pr}..."
+            gh pr merge "${pr}" --repo "${repo}" --squash --delete-branch --auto
+            local deadline=$(( $(date +%s) + 1800 ))
+            while (( $(date +%s) < deadline )); do
+              local state
+              state=$(gh pr view "${pr}" --repo "${repo}" --json state --jq -r .state)
+              if [[ "${state}" == "MERGED" ]]; then
+                echo "Merged PR #${pr} on ${repo}"
+                return 0
+              fi
+              if gh pr checks "${pr}" --repo "${repo}" 2>&1 | grep -qiE '(fail|failure)'; then
+                echo "error: required checks failed for ${repo} PR #${pr}"
+                return 1
+              fi
+              sleep 30
+            done
+            echo "error: timed out waiting to merge ${repo} PR #${pr}"
+            return 1
+          }
 
           preserve_root_as_local() {
             local root_name="$1"
@@ -103,8 +133,13 @@ jobs:
                 configured_auth_owner="${owner}"
               fi
               git commit -m "${commit_message}"
-              git push origin "HEAD:${branch}"
-              echo "Pushed updates to ${repo}@${branch}"
+              git push -f origin "HEAD:${sync_branch}"
+              pr_number=$(gh pr list --repo "${repo}" --head "${sync_branch}" --base "${branch}" --state open --json number --jq '.[0].number // empty')
+              if [[ -z "${pr_number}" ]]; then
+                pr_number=$(gh pr create --repo "${repo}" --head "${sync_branch}" --base "${branch}" --title "${commit_message}" --body "Automated sync from xenomit-do/xenomit-tooling-guidelines." --json number --jq .number)
+              fi
+              merge_sync_pr "${repo}" "${pr_number}"
+              echo "Synced updates to ${repo}@${branch} via PR #${pr_number}"
             fi
             popd >/dev/null
             rm -rf "${workdir}"
