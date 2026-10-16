@@ -19,10 +19,11 @@ jobs:
 
       - name: Sync AGENTS.md and CLAUDE.md to targets
         env:
-          GH_TOKEN: ${{ secrets.GUIDELINES_SYNC_TOKEN }}
+          XENOMIT_DO_SYNC_TOKEN: ${{ secrets.XENOMIT_DO_SYNC_TOKEN }}
+          RUFFLE_SYNC_TOKEN: ${{ secrets.RUFFLE_SYNC_TOKEN }}
         run: |
           set -euo pipefail
-          git_auth_configured=0
+          configured_auth_owner=""
 
           commit_message="chore: sync agent guidelines from xenomit-do/xenomit-tooling-guidelines [skip ci]"
           guidelines_root="$(pwd)"
@@ -50,6 +51,33 @@ jobs:
             echo "Preserved prior ${root_name} as ${local_name}"
           }
 
+          select_sync_token() {
+            local owner="$1"
+            local repo="$2"
+            local branch="$3"
+
+            case "${owner}" in
+              xenomit-do)
+                if [[ -z "${XENOMIT_DO_SYNC_TOKEN:-}" ]]; then
+                  echo "error: ${repo}@${branch} needs a push but XENOMIT_DO_SYNC_TOKEN is empty. Add the repository secret."
+                  exit 1
+                fi
+                echo "${XENOMIT_DO_SYNC_TOKEN}"
+                ;;
+              ykaydogdu)
+                if [[ -z "${RUFFLE_SYNC_TOKEN:-}" ]]; then
+                  echo "error: ${repo}@${branch} needs a push but RUFFLE_SYNC_TOKEN is empty. Add the repository secret."
+                  exit 1
+                fi
+                echo "${RUFFLE_SYNC_TOKEN}"
+                ;;
+              *)
+                echo "error: unsupported resource owner '${owner}' for ${repo}@${branch}. Add a token mapping in .github/workflows/sync-agent-guidelines.yml."
+                exit 1
+                ;;
+            esac
+          }
+
           while IFS=$'\t' read -r repo branch || [[ -n "${repo:-}" ]]; do
             repo="${repo//$'\r'/}"
             branch="${branch//$'\r'/}"
@@ -73,13 +101,12 @@ jobs:
             if git diff --cached --quiet; then
               echo "No changes for ${repo}"
             else
-              if [[ -z "${GH_TOKEN:-}" ]]; then
-                echo "error: ${repo}@${branch} needs a push but GH_TOKEN is empty. Set the GUIDELINES_SYNC_TOKEN repository secret."
-                exit 1
-              fi
-              if [[ "${git_auth_configured}" -eq 0 ]]; then
+              owner="${repo%%/*}"
+              sync_token=$(select_sync_token "${owner}" "${repo}" "${branch}")
+              if [[ "${configured_auth_owner}" != "${owner}" ]]; then
+                export GH_TOKEN="${sync_token}"
                 gh auth setup-git
-                git_auth_configured=1
+                configured_auth_owner="${owner}"
               fi
               git commit -m "${commit_message}"
               git push origin "HEAD:${branch}"
