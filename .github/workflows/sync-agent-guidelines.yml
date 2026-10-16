@@ -81,6 +81,8 @@ jobs:
             git clone --depth 1 --branch "${branch}" "https://github.com/${repo}.git" "${workdir}/target"
 
             pushd "${workdir}/target" >/dev/null
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             preserve_root_as_local AGENTS.md AGENTS.local.md "${guidelines_root}/AGENTS.md"
             preserve_root_as_local CLAUDE.md CLAUDE.local.md "${guidelines_root}/CLAUDE.md"
             cp "${guidelines_root}/AGENTS.md" "${guidelines_root}/CLAUDE.md" .
