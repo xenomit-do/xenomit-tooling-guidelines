@@ -133,7 +133,7 @@ jobs:
               fi
               git commit -m "${commit_message}"
               git push -f origin "HEAD:${sync_branch}"
-              pr_number=$(gh api "repos/${repo}/pulls" -f head="${owner}:${sync_branch}" -f base="${branch}" -f state=open --jq '.[0].number // empty')
+              pr_number=$(gh api "repos/${repo}/pulls?state=open&head=${owner}:${sync_branch}&base=${branch}" --jq '.[0].number // empty')
               if [[ -z "${pr_number}" ]]; then
                 pr_number=$(gh api -X POST "repos/${repo}/pulls" -f title="${commit_message}" -f head="${sync_branch}" -f base="${branch}" -f body="Automated sync from xenomit-do/xenomit-tooling-guidelines." --jq .number)
               fi
