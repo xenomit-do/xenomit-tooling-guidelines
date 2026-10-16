@@ -33,15 +33,12 @@ jobs:
             local repo="$1"
             local pr="$2"
 
-            if gh pr merge "${pr}" --repo "${repo}" --squash --delete-branch; then
-              echo "Merged PR #${pr} on ${repo}"
-              return 0
-            fi
-
-            echo "Waiting for required checks on ${repo} PR #${pr}..."
-            gh pr merge "${pr}" --repo "${repo}" --squash --delete-branch --auto
             local deadline=$(( $(date +%s) + 1800 ))
             while (( $(date +%s) < deadline )); do
+              if gh pr merge "${pr}" --repo "${repo}" --squash --delete-branch 2>/dev/null; then
+                echo "Merged PR #${pr} on ${repo}"
+                return 0
+              fi
               local state
               state=$(gh pr view "${pr}" --repo "${repo}" --json state --jq -r .state)
               if [[ "${state}" == "MERGED" ]]; then
@@ -52,6 +49,7 @@ jobs:
                 echo "error: required checks failed for ${repo} PR #${pr}"
                 return 1
               fi
+              echo "Waiting for ${repo} PR #${pr} to become mergeable..."
               sleep 30
             done
             echo "error: timed out waiting to merge ${repo} PR #${pr}"
