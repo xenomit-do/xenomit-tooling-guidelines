@@ -136,7 +136,8 @@ jobs:
               git push -f origin "HEAD:${sync_branch}"
               pr_number=$(gh pr list --repo "${repo}" --head "${sync_branch}" --base "${branch}" --state open --json number --jq '.[0].number // empty')
               if [[ -z "${pr_number}" ]]; then
-                pr_number=$(gh pr create --repo "${repo}" --head "${sync_branch}" --base "${branch}" --title "${commit_message}" --body "Automated sync from xenomit-do/xenomit-tooling-guidelines." --json number --jq .number)
+                gh pr create --repo "${repo}" --head "${sync_branch}" --base "${branch}" --title "${commit_message}" --body "Automated sync from xenomit-do/xenomit-tooling-guidelines."
+                pr_number=$(gh pr list --repo "${repo}" --head "${sync_branch}" --base "${branch}" --state open --json number --jq '.[0].number')
               fi
               merge_sync_pr "${repo}" "${pr_number}"
               echo "Synced updates to ${repo}@${branch} via PR #${pr_number}"
