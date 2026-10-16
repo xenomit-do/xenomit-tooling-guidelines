@@ -20,7 +20,6 @@ jobs:
       - name: Sync AGENTS.md and CLAUDE.md to targets
         env:
           XENOMIT_DO_SYNC_TOKEN: ${{ secrets.XENOMIT_DO_SYNC_TOKEN }}
-          RUFFLE_SYNC_TOKEN: ${{ secrets.RUFFLE_SYNC_TOKEN }}
         run: |
           set -euo pipefail
           configured_auth_owner=""
@@ -63,13 +62,6 @@ jobs:
                   exit 1
                 fi
                 echo "${XENOMIT_DO_SYNC_TOKEN}"
-                ;;
-              ykaydogdu)
-                if [[ -z "${RUFFLE_SYNC_TOKEN:-}" ]]; then
-                  echo "error: ${repo}@${branch} needs a push but RUFFLE_SYNC_TOKEN is empty. Add the repository secret."
-                  exit 1
-                fi
-                echo "${RUFFLE_SYNC_TOKEN}"
                 ;;
               *)
                 echo "error: unsupported resource owner '${owner}' for ${repo}@${branch}. Add a token mapping in .github/workflows/sync-agent-guidelines.yml."
