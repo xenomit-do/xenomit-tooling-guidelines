@@ -40,12 +40,12 @@ jobs:
                 gh api -X DELETE "repos/${repo}/git/refs/heads/${sync_branch}" >/dev/null 2>&1 || true
                 return 0
               fi
-              if [[ "$(gh api "repos/${repo}/pulls/${pr}" --jq -r .merged)" == "true" ]]; then
+              if [[ "$(gh api "repos/${repo}/pulls/${pr}" --jq .merged)" == "true" ]]; then
                 echo "Merged PR #${pr} on ${repo}"
                 return 0
               fi
               local head_sha fail_count
-              head_sha=$(gh api "repos/${repo}/pulls/${pr}" --jq -r .head.sha)
+              head_sha=$(gh api "repos/${repo}/pulls/${pr}" --jq .head.sha)
               fail_count=$(gh api "repos/${repo}/commits/${head_sha}/check-runs" --jq '[.check_runs[] | select(.conclusion == "failure")] | length')
               if [[ "${fail_count}" != "0" ]]; then
                 echo "error: required checks failed for ${repo} PR #${pr}"
