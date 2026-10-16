@@ -22,7 +22,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GUIDELINES_SYNC_TOKEN }}
         run: |
           set -euo pipefail
-          gh auth setup-git
+          git_auth_configured=0
 
           commit_message="chore: sync agent guidelines from xenomit-do/xenomit-tooling-guidelines [skip ci]"
           guidelines_root="$(pwd)"
@@ -73,6 +73,14 @@ jobs:
             if git diff --cached --quiet; then
               echo "No changes for ${repo}"
             else
+              if [[ -z "${GH_TOKEN:-}" ]]; then
+                echo "error: ${repo}@${branch} needs a push but GH_TOKEN is empty. Set the GUIDELINES_SYNC_TOKEN repository secret."
+                exit 1
+              fi
+              if [[ "${git_auth_configured}" -eq 0 ]]; then
+                gh auth setup-git
+                git_auth_configured=1
+              fi
               git commit -m "${commit_message}"
               git push origin "HEAD:${branch}"
               echo "Pushed updates to ${repo}@${branch}"
