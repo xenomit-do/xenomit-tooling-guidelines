@@ -44,9 +44,10 @@ jobs:
                 echo "Merged PR #${pr} on ${repo}"
                 return 0
               fi
-              local head_sha
+              local head_sha fail_count
               head_sha=$(gh api "repos/${repo}/pulls/${pr}" --jq -r .head.sha)
-              if [[ "$(gh api "repos/${repo}/commits/${head_sha}/check-runs" --jq '[.check_runs[] | select(.conclusion=="failure")] | length')" != "0" ]]; then
+              fail_count=$(gh api "repos/${repo}/commits/${head_sha}/check-runs" --jq '[.check_runs[] | select(.conclusion == "failure")] | length')
+              if [[ "${fail_count}" != "0" ]]; then
                 echo "error: required checks failed for ${repo} PR #${pr}"
                 return 1
               fi
